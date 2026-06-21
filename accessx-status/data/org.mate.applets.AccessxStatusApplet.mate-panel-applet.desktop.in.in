@@ -11,7 +11,7 @@ Description=Shows the status of keyboard accessibility features
 # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
 Icon=preferences-desktop-accessibility
 MateComponentId=OAFIID:MATE_AccessxStatusApplet
-Platforms=X11;
+Platforms=@APPLET_PLATFORMS@
 X-MATE-Bugzilla-Bugzilla=MATE
 X-MATE-Bugzilla-Product=mate-applets
 X-MATE-Bugzilla-Component=keyboard-accessibility (accessx-status)

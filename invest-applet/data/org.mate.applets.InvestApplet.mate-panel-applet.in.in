@@ -10,6 +10,7 @@ Name=Invest
 Description=Track your invested money.
 Icon=mate-invest-applet
 BonoboId=OAFIID:Invest_Applet_Factory
+Platforms=@APPLET_PLATFORMS@
 X-MATE-Bugzilla-Bugzilla=MATE
 X-MATE-Bugzilla-Product=mate-applets
 X-MATE-Bugzilla-Component=invest

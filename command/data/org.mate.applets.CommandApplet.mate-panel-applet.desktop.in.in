@@ -8,6 +8,6 @@ Description=Command Factory
 [CommandApplet]
 Name=Command
 Description=Shows the output of a command
-Platforms=X11;
+Platforms=@APPLET_PLATFORMS@
 # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
 Icon=utilities-terminal

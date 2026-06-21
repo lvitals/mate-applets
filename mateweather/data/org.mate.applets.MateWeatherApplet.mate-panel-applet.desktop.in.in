@@ -11,7 +11,7 @@ Description=Monitor the current weather conditions, and forecasts
 # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
 Icon=weather-storm
 MateComponentId=OAFIID:MATE_MateWeatherApplet
-Platforms=X11;
+Platforms=@APPLET_PLATFORMS@
 X-MATE-Bugzilla-Bugzilla=MATE
 X-MATE-Bugzilla-Product=mate-applets
 X-MATE-Bugzilla-Component=mateweather

@@ -11,7 +11,7 @@ Description=Create, view, and manage sticky notes on the desktop
 # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
 Icon=mate-sticky-notes-applet
 MateComponentId=OAFIID:MATE_StickyNotesApplet
-Platforms=X11;
+Platforms=@APPLET_PLATFORMS@
 X-MATE-Bugzilla-Bugzilla=MATE
 X-MATE-Bugzilla-Product=mate-applets
 X-MATE-Bugzilla-Component=stickynotes
