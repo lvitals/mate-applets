@@ -254,14 +254,15 @@ app_specs += [{
   'sources': ['geyes/src/geyes.c', 'geyes/src/themes.c'],
   'includes': ['geyes/src'],
   'deps': common_deps + [libm_dep],
-  'c_args': ['-DGEYES_THEMES_DIR="@0@"'.format(join_paths(pkgdatadir, 'geyes')), '-DGEYES_RESOURCE_PATH="/org/mate/mate-applets/eyes/"'],
+  'c_args': ['-DGEYES_THEMES_DIR="@0@/"'.format(join_paths(pkgdatadir, 'geyes')), '-DGEYES_RESOURCE_PATH="/org/mate/mate-applets/eyes/"'],
   'gresource': 'geyes/data/geyes-resources.gresource.xml',
   'gresource_source_dir': 'geyes/data',
   'gresource_c_name': 'eyes',
   'desktop': 'geyes/data/org.mate.applets.GeyesApplet.mate-panel-applet.desktop.in.in',
   'service': 'geyes/data/org.mate.panel.applet.GeyesAppletFactory.service.in',
   'schema': 'geyes/data/org.mate.panel.applet.geyes.gschema.xml.in',
-  'platforms': default_platforms,
+  'platforms': in_process ? x11_only_platforms : xwayland_platforms,
+  'xwayland': not in_process,
   'enabled': true,
 }]
 
