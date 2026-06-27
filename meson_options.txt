@@ -1,4 +1,3 @@
-option('in-process', type: 'boolean', value: true, description: 'Build applets as shared libraries for in-process loading (required for Wayland)')
 option('battstat', type: 'feature', value: 'auto', description: 'Build battery status applet')
 option('cpufreq', type: 'feature', value: 'auto', description: 'Build CPU frequency applet')
 option('gtop-applets', type: 'feature', value: 'auto', description: 'Build libgtop applets')

@@ -43,19 +43,10 @@ have_x11 = true
 have_wayland = true
 x11_deps = [gdk_x11_dep, x11_dep]
 
-in_process = get_option('in-process')
-applet_in_process = in_process
-applet_in_process_string = in_process ? 'true' : 'false'
+in_process = true
 default_platforms = 'X11;Wayland;'
 x11_only_platforms = 'X11;'
 xwayland_platforms = default_platforms
-
-if in_process
-  add_project_arguments('-DPANEL_APPLET_FACTORY=MATE_PANEL_APPLET_IN_PROCESS_FACTORY', language: 'c')
-  add_project_arguments('-DENABLE_IN_PROCESS', language: 'c')
-else
-  add_project_arguments('-DPANEL_APPLET_FACTORY=MATE_PANEL_APPLET_OUT_PROCESS_FACTORY', language: 'c')
-endif
 
 conf = configuration_data()
 conf.set_quoted('PACKAGE', meson.project_name())
@@ -261,8 +252,7 @@ app_specs += [{
   'desktop': 'geyes/data/org.mate.applets.GeyesApplet.mate-panel-applet.desktop.in.in',
   'service': 'geyes/data/org.mate.panel.applet.GeyesAppletFactory.service.in',
   'schema': 'geyes/data/org.mate.panel.applet.geyes.gschema.xml.in',
-  'platforms': in_process ? x11_only_platforms : xwayland_platforms,
-  'xwayland': not in_process,
+  'platforms': default_platforms,
   'enabled': true,
 }]
 
@@ -459,8 +449,9 @@ if cc.has_header('X11/extensions/XKB.h') and not get_option('accessx').disabled(
     'desktop': 'accessx-status/data/org.mate.applets.AccessxStatusApplet.mate-panel-applet.desktop.in.in',
     'service': 'accessx-status/data/org.mate.panel.applet.AccessxStatusAppletFactory.service.in',
     'schema': '',
-    'platforms': in_process ? x11_only_platforms : xwayland_platforms,
-    'xwayland': not in_process,
+    'in_process': true,
+    'platforms': x11_only_platforms,
+    'xwayland': true,
     'enabled': true,
   }]
 endif
@@ -480,8 +471,9 @@ if libwnck_dep.found() and xml_dep.found() and not get_option('stickynotes').dis
     'desktop': 'stickynotes/org.mate.applets.StickyNotesApplet.mate-panel-applet.desktop.in.in',
     'service': 'stickynotes/org.mate.panel.applet.StickyNotesAppletFactory.service.in',
     'schema': 'stickynotes/org.mate.stickynotes.gschema.xml.in',
-    'platforms': in_process ? x11_only_platforms : xwayland_platforms,
-    'xwayland': not in_process,
+    'in_process': true,
+    'platforms': default_platforms,
+    'xwayland': true,
     'enabled': true,
   }]
 endif
@@ -501,13 +493,23 @@ foreach spec : app_specs
     )
   endif
 
-  if in_process
+  applet_in_process = spec.get('in_process', in_process)
+  applet_in_process_string = applet_in_process ? 'true' : 'false'
+
+  applet_c_args = spec['c_args']
+  if applet_in_process
+    applet_c_args += ['-DPANEL_APPLET_FACTORY=MATE_PANEL_APPLET_IN_PROCESS_FACTORY', '-DENABLE_IN_PROCESS']
+  else
+    applet_c_args += ['-DPANEL_APPLET_FACTORY=MATE_PANEL_APPLET_OUT_PROCESS_FACTORY']
+  endif
+
+  if applet_in_process
     app_location = join_paths(pkgmoduledir, 'lib' + spec['module'] + '.so')
     service_location = app_location
     shared_library(spec['module'],
       app_sources,
       include_directories: app_includes,
-      c_args: spec['c_args'],
+      c_args: applet_c_args,
       dependencies: spec['deps'],
       install: true,
       install_dir: pkgmoduledir
@@ -515,13 +517,13 @@ foreach spec : app_specs
   else
     app_location = join_paths(libexecdir, spec['exec'])
     service_location = app_location
-    if spec.get('xwayland', false)
+    if spec.get('xwayland', true)
       service_location = 'env GDK_BACKEND=x11 ' + app_location
     endif
     executable(spec['exec'],
       app_sources,
       include_directories: app_includes,
-      c_args: spec['c_args'],
+      c_args: applet_c_args,
       dependencies: spec['deps'],
       install: true,
       install_dir: libexecdir

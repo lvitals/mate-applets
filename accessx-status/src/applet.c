@@ -269,8 +269,16 @@ accessx_status_applet_xkb_select (AccessxStatusApplet* sapplet)
     int opcode_rtn, error_rtn;
     gboolean retval = FALSE;
     GdkWindow* window = gtk_widget_get_window (GTK_WIDGET (sapplet->applet));
+    GdkDisplay* gdk_display;
 
     g_assert (sapplet && sapplet->applet && window);
+
+    gdk_display = gdk_window_get_display (window);
+    if (!GDK_IS_X11_DISPLAY (gdk_display))
+    {
+        sapplet->error_type = ACCESSX_STATUS_ERROR_BACKEND_UNSUPPORTED;
+        return FALSE;
+    }
 
     Display* display = GDK_WINDOW_XDISPLAY (window);
 
@@ -1279,6 +1287,10 @@ popup_error_dialog (AccessxStatusApplet* sapplet)
             error_txt = g_strdup (_("XKB Extension is not enabled"));
             break;
 
+        case ACCESSX_STATUS_ERROR_BACKEND_UNSUPPORTED:
+            error_txt = g_strdup (_("AccessX status is only supported on X11"));
+            break;
+
         case ACCESSX_STATUS_ERROR_UNKNOWN:
 
         default: error_txt = g_strdup (_("Unknown error"));
@@ -1704,4 +1716,3 @@ PANEL_APPLET_FACTORY ("AccessxStatusAppletFactory",
                       "accessx-status",
                       accessx_status_applet_factory,
                       NULL)
-
