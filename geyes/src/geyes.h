@@ -46,6 +46,11 @@ typedef struct
     guint            timeout_id;
     gint            *pointer_last_x;
     gint            *pointer_last_y;
+#ifdef HAVE_WAYLAND
+    gint            *wayland_offset_x;
+    gint            *wayland_offset_y;
+    gboolean        *wayland_offset_calibrated;
+#endif
 
     /* Theme */
     GdkPixbuf       *eye_image;
@@ -66,6 +71,10 @@ typedef struct
 
     /* Settings */
     GSettings       *settings;
+
+#ifdef HAVE_WAYLAND
+    gboolean         toplevel_connected;
+#endif
 } EyesApplet;
 
 /* eyes.c */

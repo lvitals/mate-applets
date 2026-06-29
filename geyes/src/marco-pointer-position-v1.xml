@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="marco_pointer_position_v1">
+  <interface name="marco_pointer_position_manager_v1" version="1">
+    <request name="destroy" type="destructor"/>
+    <request name="get_pointer_position">
+      <arg name="id" type="new_id" interface="marco_pointer_position_v1"/>
+    </request>
+  </interface>
+
+  <interface name="marco_pointer_position_v1" version="1">
+    <request name="destroy" type="destructor"/>
+    <event name="motion">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </event>
+  </interface>
+</protocol>

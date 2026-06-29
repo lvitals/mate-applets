@@ -253,6 +253,7 @@ app_specs += [{
   'service': 'geyes/data/org.mate.panel.applet.GeyesAppletFactory.service.in',
   'schema': 'geyes/data/org.mate.panel.applet.geyes.gschema.xml.in',
   'platforms': default_platforms,
+  'xwayland': false,
   'enabled': true,
 }]
 
@@ -484,6 +485,30 @@ foreach spec : app_specs
   foreach app_include : spec['includes']
     app_includes += include_directories(app_include)
   endforeach
+
+  app_deps = spec['deps']
+  if spec['id'] == 'geyes' and have_wayland
+    wayland_scanner = find_program('wayland-scanner')
+    wayland_client = dependency('wayland-client')
+    
+    xml = files('geyes/src/marco-pointer-position-v1.xml')
+    
+    c_file = custom_target('marco-pointer-position-v1-code.c',
+      input: xml,
+      output: 'marco-pointer-position-v1-code.c',
+      command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@']
+    )
+    
+    h_file = custom_target('marco-pointer-position-v1-client.h',
+      input: xml,
+      output: 'marco-pointer-position-v1-client.h',
+      command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@']
+    )
+    
+    app_sources += [c_file, h_file]
+    app_deps += [wayland_client]
+  endif
+
   if spec['gresource'] != ''
     app_sources += gnome.compile_resources(
       spec['id'] + '-resources',
@@ -510,7 +535,7 @@ foreach spec : app_specs
       app_sources,
       include_directories: app_includes,
       c_args: applet_c_args,
-      dependencies: spec['deps'],
+      dependencies: app_deps,
       install: true,
       install_dir: pkgmoduledir
     )
@@ -524,7 +549,7 @@ foreach spec : app_specs
       app_sources,
       include_directories: app_includes,
       c_args: applet_c_args,
-      dependencies: spec['deps'],
+      dependencies: app_deps,
       install: true,
       install_dir: libexecdir
     )

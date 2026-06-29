@@ -24,6 +24,84 @@
 #include <mate-panel-applet-gsettings.h>
 #include "geyes.h"
 
+#ifdef HAVE_WAYLAND
+#include <gdk/gdkwayland.h>
+#include <wayland-client.h>
+#include "marco-pointer-position-v1-client.h"
+
+static struct marco_pointer_position_manager_v1 *pointer_manager = NULL;
+static struct marco_pointer_position_v1 *pointer_position = NULL;
+static int wayland_x = 0;
+static int wayland_y = 0;
+static gboolean has_wayland_pointer = FALSE;
+static gboolean wayland_pointer_initialized = FALSE;
+
+static void
+pointer_position_handle_motion (void *data,
+                                struct marco_pointer_position_v1 *pp,
+                                int32_t x,
+                                int32_t y)
+{
+    wayland_x = x;
+    wayland_y = y;
+    has_wayland_pointer = TRUE;
+}
+
+static const struct marco_pointer_position_v1_listener pointer_position_listener = {
+    .motion = pointer_position_handle_motion,
+};
+
+static void
+registry_handle_global (void *data,
+                        struct wl_registry *registry,
+                        uint32_t id,
+                        const char *interface,
+                        uint32_t version)
+{
+    if (strcmp (interface, "marco_pointer_position_manager_v1") == 0) {
+        pointer_manager = wl_registry_bind (registry, id, &marco_pointer_position_manager_v1_interface, 1);
+        if (pointer_manager) {
+            pointer_position = marco_pointer_position_manager_v1_get_pointer_position (pointer_manager);
+            if (pointer_position) {
+                marco_pointer_position_v1_add_listener (pointer_position, &pointer_position_listener, NULL);
+            }
+        }
+    }
+}
+
+static void
+registry_handle_global_remove (void *data,
+                               struct wl_registry *registry,
+                               uint32_t id)
+{
+}
+
+static const struct wl_registry_listener registry_listener = {
+    .global = registry_handle_global,
+    .global_remove = registry_handle_global_remove,
+};
+
+static void
+setup_wayland_pointer (void)
+{
+    if (wayland_pointer_initialized)
+        return;
+    wayland_pointer_initialized = TRUE;
+
+    GdkDisplay *display = gdk_display_get_default ();
+    if (GDK_IS_WAYLAND_DISPLAY (display)) {
+        struct wl_display *wl_disp = gdk_wayland_display_get_wl_display (display);
+        if (wl_disp) {
+            struct wl_registry *registry = wl_display_get_registry (wl_disp);
+            if (registry) {
+                wl_registry_add_listener (registry, &registry_listener, NULL);
+                wl_display_roundtrip (wl_disp);
+            }
+        }
+    }
+}
+#endif
+
 #define UPDATE_TIMEOUT 100
 
 static gfloat
@@ -127,6 +205,38 @@ draw_eye (EyesApplet *eyes_applet,
 
 }
 
+#ifdef HAVE_WAYLAND
+static void
+calibrate_offsets (EyesApplet *eyes_applet, GtkWidget *event_widget, double x, double y)
+{
+    if (has_wayland_pointer) {
+        gsize i;
+        for (i = 0; i < eyes_applet->num_eyes; i++) {
+            gint dx = 0, dy = 0;
+            if (gtk_widget_translate_coordinates (event_widget, eyes_applet->eyes[i], (gint)x, (gint)y, &dx, &dy)) {
+                eyes_applet->wayland_offset_x[i] = wayland_x - dx;
+                eyes_applet->wayland_offset_y[i] = wayland_y - dy;
+                eyes_applet->wayland_offset_calibrated[i] = TRUE;
+            }
+        }
+    }
+}
+
+static gboolean
+applet_motion_notify_cb (GtkWidget      *widget,
+                         GdkEventMotion *event,
+                         EyesApplet     *eyes_applet)
+{
+    GtkWidget *event_widget = gtk_get_event_widget ((GdkEvent *)event);
+    if (!event_widget) {
+        event_widget = widget;
+    }
+    calibrate_offsets (eyes_applet, event_widget, event->x, event->y);
+    return FALSE;
+}
+
+#endif
+
 static gint
 timer_cb (EyesApplet *eyes_applet)
 {
@@ -152,27 +262,77 @@ timer_cb (EyesApplet *eyes_applet)
     if (pointer_device == NULL)
         return TRUE;
 
+#ifdef HAVE_WAYLAND
+    if (has_wayland_pointer && !eyes_applet->toplevel_connected) {
+        GtkWidget *toplevel = gtk_widget_get_toplevel (GTK_WIDGET (eyes_applet->applet));
+        if (toplevel && GTK_IS_WINDOW (toplevel) && gtk_widget_get_realized (toplevel)) {
+            gtk_widget_add_events (toplevel, GDK_POINTER_MOTION_MASK);
+            g_signal_connect (toplevel, "motion-notify-event",
+                              G_CALLBACK (applet_motion_notify_cb), eyes_applet);
+            eyes_applet->toplevel_connected = TRUE;
+        }
+    }
+#endif
+
     for (i = 0; i < eyes_applet->num_eyes; i++)
     {
         if (gtk_widget_get_realized (eyes_applet->eyes[i]))
         {
-            gdk_window_get_device_position (gtk_widget_get_window (eyes_applet->eyes[i]),
-                                            pointer_device,
-                                            &x, &y, NULL);
-
-            /*correct for the positon of each eye, this is done differently in-process or out*/
+#ifdef HAVE_WAYLAND
+            if (has_wayland_pointer)
+            {
+                gint gdk_x, gdk_y;
+                if (gdk_window_get_device_position (gtk_widget_get_window (eyes_applet->eyes[i]),
+                                                    pointer_device,
+                                                    &gdk_x, &gdk_y, NULL) != NULL)
+                {
 #ifdef ENABLE_IN_PROCESS
-            gtk_widget_get_allocation(GTK_WIDGET(eyes_applet->eyes[i]), &allocation);
-            x -= i * allocation.width;
-            /*eyes are always drawn in a horizontal row
-             *so we don't need to correct anything in the value of y
-             */
+                    gtk_widget_get_allocation(GTK_WIDGET(eyes_applet->eyes[i]), &allocation);
+                    gdk_x -= i * allocation.width;
 #else
-            gtk_widget_translate_coordinates (eyes_applet->eyes[i],
-                                              gtk_widget_get_toplevel(eyes_applet->eyes[i]),
-                                              0, 0, &dx, &dy);
-            x -= dx;
-            y -= dy;
+                    gtk_widget_translate_coordinates (eyes_applet->eyes[i],
+                                                      gtk_widget_get_toplevel(eyes_applet->eyes[i]),
+                                                      0, 0, &dx, &dy);
+                    gdk_x -= dx;
+                    gdk_y -= dy;
+#endif
+                    eyes_applet->wayland_offset_x[i] = wayland_x - gdk_x;
+                    eyes_applet->wayland_offset_y[i] = wayland_y - gdk_y;
+                    eyes_applet->wayland_offset_calibrated[i] = TRUE;
+                    x = gdk_x;
+                    y = gdk_y;
+                }
+                else if (eyes_applet->wayland_offset_calibrated[i])
+                {
+                    x = wayland_x - eyes_applet->wayland_offset_x[i];
+                    y = wayland_y - eyes_applet->wayland_offset_y[i];
+                }
+                else
+                {
+                    x = eyes_applet->eye_width / 2;
+                    y = eyes_applet->eye_height / 2;
+                }
+            }
+            else
+            {
+#endif
+                gdk_window_get_device_position (gtk_widget_get_window (eyes_applet->eyes[i]),
+                                                pointer_device,
+                                                &x, &y, NULL);
+
+                /*correct for the positon of each eye, this is done differently in-process or out*/
+#ifdef ENABLE_IN_PROCESS
+                gtk_widget_get_allocation(GTK_WIDGET(eyes_applet->eyes[i]), &allocation);
+                x -= i * allocation.width;
+#else
+                gtk_widget_translate_coordinates (eyes_applet->eyes[i],
+                                                  gtk_widget_get_toplevel(eyes_applet->eyes[i]),
+                                                  0, 0, &dx, &dy);
+                x -= dx;
+                y -= dy;
+#endif
+#ifdef HAVE_WAYLAND
+            }
 #endif
 
             if ((x != eyes_applet->pointer_last_x[i]) ||
@@ -257,6 +417,16 @@ setup_eyes (EyesApplet *eyes_applet)
     eyes_applet->eyes = g_new0 (GtkWidget *, eyes_applet->num_eyes);
     eyes_applet->pointer_last_x = g_new0 (gint, eyes_applet->num_eyes);
     eyes_applet->pointer_last_y = g_new0 (gint, eyes_applet->num_eyes);
+#ifdef HAVE_WAYLAND
+    eyes_applet->wayland_offset_x = g_new0 (gint, eyes_applet->num_eyes);
+    eyes_applet->wayland_offset_y = g_new0 (gint, eyes_applet->num_eyes);
+    eyes_applet->wayland_offset_calibrated = g_new0 (gboolean, eyes_applet->num_eyes);
+    eyes_applet->toplevel_connected = FALSE;
+
+    for (i = 0; i < eyes_applet->num_eyes; i++) {
+        eyes_applet->wayland_offset_calibrated[i] = FALSE;
+    }
+#endif
 
     for (i = 0; i < eyes_applet->num_eyes; i++) {
         if ((eyes_applet->eyes[i] = gtk_image_new ()) == NULL)
@@ -302,6 +472,11 @@ destroy_eyes (EyesApplet *eyes_applet)
     g_free (eyes_applet->eyes);
     g_free (eyes_applet->pointer_last_x);
     g_free (eyes_applet->pointer_last_y);
+#ifdef HAVE_WAYLAND
+    g_free (eyes_applet->wayland_offset_x);
+    g_free (eyes_applet->wayland_offset_y);
+    g_free (eyes_applet->wayland_offset_calibrated);
+#endif
 }
 
 static EyesApplet*
@@ -428,6 +603,10 @@ geyes_applet_fill (MatePanelApplet *applet)
     mate_panel_applet_set_flags (applet, MATE_PANEL_APPLET_EXPAND_MINOR);
 
     eyes_applet = create_eyes (applet);
+
+#ifdef HAVE_WAYLAND
+    setup_wayland_pointer ();
+#endif
 
     eyes_applet->timeout_id = g_timeout_add (UPDATE_TIMEOUT,
                                              (GSourceFunc) timer_cb,
