@@ -73,7 +73,8 @@ typedef struct
     GSettings       *settings;
 
 #ifdef HAVE_WAYLAND
-    gboolean         toplevel_connected;
+    GtkWidget       *motion_toplevel;
+    gulong           motion_handler_id;
 #endif
 } EyesApplet;
 

@@ -263,13 +263,14 @@ timer_cb (EyesApplet *eyes_applet)
         return TRUE;
 
 #ifdef HAVE_WAYLAND
-    if (has_wayland_pointer && !eyes_applet->toplevel_connected) {
+    if (has_wayland_pointer && eyes_applet->motion_handler_id == 0) {
         GtkWidget *toplevel = gtk_widget_get_toplevel (GTK_WIDGET (eyes_applet->applet));
         if (toplevel && GTK_IS_WINDOW (toplevel) && gtk_widget_get_realized (toplevel)) {
             gtk_widget_add_events (toplevel, GDK_POINTER_MOTION_MASK);
-            g_signal_connect (toplevel, "motion-notify-event",
-                              G_CALLBACK (applet_motion_notify_cb), eyes_applet);
-            eyes_applet->toplevel_connected = TRUE;
+            eyes_applet->motion_toplevel = toplevel;
+            eyes_applet->motion_handler_id =
+                g_signal_connect (toplevel, "motion-notify-event",
+                                  G_CALLBACK (applet_motion_notify_cb), eyes_applet);
         }
     }
 #endif
@@ -421,7 +422,6 @@ setup_eyes (EyesApplet *eyes_applet)
     eyes_applet->wayland_offset_x = g_new0 (gint, eyes_applet->num_eyes);
     eyes_applet->wayland_offset_y = g_new0 (gint, eyes_applet->num_eyes);
     eyes_applet->wayland_offset_calibrated = g_new0 (gboolean, eyes_applet->num_eyes);
-    eyes_applet->toplevel_connected = FALSE;
 
     for (i = 0; i < eyes_applet->num_eyes; i++) {
         eyes_applet->wayland_offset_calibrated[i] = FALSE;
@@ -500,6 +500,15 @@ destroy_cb (GObject    *object,
     g_return_if_fail (eyes_applet);
 
     g_source_remove (eyes_applet->timeout_id);
+
+#ifdef HAVE_WAYLAND
+    if (eyes_applet->motion_handler_id != 0) {
+        g_signal_handler_disconnect (eyes_applet->motion_toplevel,
+                                     eyes_applet->motion_handler_id);
+        eyes_applet->motion_handler_id = 0;
+        eyes_applet->motion_toplevel = NULL;
+    }
+#endif
 
     if (eyes_applet->hbox)
         destroy_eyes (eyes_applet);
